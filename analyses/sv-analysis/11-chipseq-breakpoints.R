@@ -1,14 +1,12 @@
 library(Rsamtools)
+library(readr)
 
 # Detect the ".git" folder -- this will in the project root directory.
 # Use this as the root directory to ensure proper sourcing of functions no
 # matter where this is called from
 root_dir <- rprojroot::find_root(rprojroot::has_dir(".git"))
 
-# read chipseq bed file
-filepath <- file.path(root_dir,"scratch", "chipseq", "ENCFF436ITH.bed.gz")
-bedfile <- read_tsv(filepath, col_names=F)
-bedfile$X1 <- gsub("chr","",bedfile$X1)
+
 
 ## ===================== Load  Independent Specimen List =====================
 independent_specimen_list <-  read.table(file.path(root_dir, "data","independent-specimens.wgs.primary-plus.tsv"), header = TRUE, sep = "\t")
@@ -58,23 +56,53 @@ in_out <- function(samplesv)  {
   return(conclusion_df)
 }
 
-breakpoint_inout_mutaion <- data.frame()
-for (i  in mutation_bioid) {
-  print(i)
-  samplesv <- as.data.frame(breakpoint_all[breakpoint_all$Kids.First.Biospecimen.ID.Tumor == i,])
-  samplesv = cbind(samplesv,in_out(samplesv))
-  breakpoint_inout_mutaion = rbind(breakpoint_inout_mutaion,samplesv)
+
+# read chipseq bed file
+
+allfiles <- list.files(file.path(root_dir,"scratch","chipseq"),pattern = "*.gz")
+resultout <- data.frame(matrix(NA,ncol = 7))
+colnames(resultout) <- c("breakpoint_in_mutaion",
+                         "breakpoint_in_unmutaion",
+                         "breakpoint_all_mutaion",
+                         "breakpoint_all_unmutaion",
+                         "p.value",
+                         "or",
+                         "file"
+                         )
+for (filei in allfiles) {
+  
+  filepath <- file.path(root_dir,"scratch", "chipseq", filei)
+  bedfile <- read_tsv(filepath, col_names=F)
+  bedfile$X1 <- gsub("chr","",bedfile$X1)
+  
+  breakpoint_inout_mutaion <- data.frame()
+  for (i  in mutation_bioid) {
+    samplesv <- as.data.frame(breakpoint_all[breakpoint_all$Kids.First.Biospecimen.ID.Tumor == i,])
+    samplesv = cbind(samplesv,in_out(samplesv))
+    breakpoint_inout_mutaion = rbind(breakpoint_inout_mutaion,samplesv)
+  }
+  breakpoint_inout_unmutaion <- data.frame()
+  for (i  in nonmutation_bioid) {
+    samplesv <- as.data.frame(breakpoint_all[breakpoint_all$Kids.First.Biospecimen.ID.Tumor == i,])
+    samplesv = cbind(samplesv,in_out(samplesv))
+    breakpoint_inout_unmutaion = rbind(breakpoint_inout_unmutaion,samplesv)
+  }
+  nrow(breakpoint_inout_mutaion[breakpoint_inout_mutaion$chipseq>0,])/nrow(breakpoint_inout_mutaion)
+  nrow(breakpoint_inout_unmutaion[breakpoint_inout_unmutaion$chipseq>0,])/nrow(breakpoint_inout_unmutaion)
+  result <- fisher.test(matrix(data=c(nrow(breakpoint_inout_mutaion[breakpoint_inout_mutaion$chipseq>0,]),
+                                      nrow(breakpoint_inout_mutaion),
+                                      nrow(breakpoint_inout_unmutaion[breakpoint_inout_unmutaion$chipseq>0,]),
+                                      nrow(breakpoint_inout_unmutaion)),nrow = 2,ncol = 2))
+  if (result$p.value < 0.05 & result$estimate > 1) {
+    resultadd <- data.frame("breakpoint_in_mutaion"=nrow(breakpoint_inout_mutaion[breakpoint_inout_mutaion$chipseq>0,]),
+                            "breakpoint_in_unmutaion"=nrow(breakpoint_inout_unmutaion[breakpoint_inout_unmutaion$chipseq>0,]),
+                            "breakpoint_all_mutaion"=nrow(breakpoint_inout_mutaion),
+                            "breakpoint_all_unmutaion"=nrow(breakpoint_inout_unmutaion),
+                            "p.value"=result$p.value,
+                            "or"=result$estimate,
+                            "file"=filei)
+    resultout <- rbind(resultout,resultadd)
+  }
 }
-breakpoint_inout_unmutaion <- data.frame()
-for (i  in nonmutation_bioid) {
-  print(i)
-  samplesv <- as.data.frame(breakpoint_all[breakpoint_all$Kids.First.Biospecimen.ID.Tumor == i,])
-  samplesv = cbind(samplesv,in_out(samplesv))
-  breakpoint_inout_unmutaion = rbind(breakpoint_inout_unmutaion,samplesv)
-}
-nrow(breakpoint_inout_mutaion[breakpoint_inout_mutaion$chipseq>0,])/nrow(breakpoint_inout_mutaion)
-nrow(breakpoint_inout_unmutaion[breakpoint_inout_unmutaion$chipseq>0,])/nrow(breakpoint_inout_unmutaion)
-fisher.test(matrix(data=c(nrow(breakpoint_inout_mutaion[breakpoint_inout_mutaion$chipseq>0,]),
-                          nrow(breakpoint_inout_mutaion),
-                          nrow(breakpoint_inout_unmutaion[breakpoint_inout_unmutaion$chipseq>0,]),
-                          nrow(breakpoint_inout_unmutaion)),nrow = 2,ncol = 2))
+write.csv(resultout,file.path(root_dir,"scratch","chipseq","chipseq_significant_result.csv"),quote = F)
+
