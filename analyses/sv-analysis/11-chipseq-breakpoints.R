@@ -44,7 +44,7 @@ mutation_bioid <- colnames(snv_df[,snv_df[mygene,] > 0])
 nonmutation_bioid <-  bioid[(bioid %in% mutation_bioid) == FALSE]
 
 
-## ==================== Count number =================
+## ==================== Count number and do test=================
 # FUNCTION find in and out site
 in_out <- function(samplesv)  {
   conclusion_df <- data.frame()
@@ -60,7 +60,7 @@ in_out <- function(samplesv)  {
 # read chipseq bed file
 
 allfiles <- list.files(file.path(root_dir,"scratch","chipseq"),pattern = "*.gz")
-resultout <- data.frame(matrix(NA,ncol = 7))
+resultout <- data.frame(matrix(NA,ncol = 7,nrow = 0))
 colnames(resultout) <- c("breakpoint_in_mutaion",
                          "breakpoint_in_unmutaion",
                          "breakpoint_all_mutaion",
@@ -106,3 +106,29 @@ for (filei in allfiles) {
 }
 write.csv(resultout,file.path(root_dir,"scratch","chipseq","chipseq_significant_result.csv"),quote = F)
 
+
+## ===================== Load chipseq info ========================
+chipseq_info <- read.delim(file.path(root_dir,"scratch","chipseq","experiment_report_2020_2_10_17h_44m.tsv"))
+resultout_name  <- gsub(".bed.gz","",unique(resultout$file))
+allfiles_name <- gsub(".bed.gz","",list.files(file.path(root_dir,"scratch","chipseq"),pattern = "*.gz"))
+
+resultout_info <- data.frame(matrix(NA,ncol =8 ,nrow = 0))    
+colnames(resultout_info) <-  c("name","Target.of.assay","Biosample.summary","Biosample.term.name","Life.stage","Age","Age.units","Biosample.treatment")
+for (namei in resultout_name){
+  resultout_add <- chipseq_info[grepl(namei, chipseq_info$Files),c("Target.of.assay","Biosample.summary","Biosample.term.name","Life.stage","Age","Age.units","Biosample.treatment")]
+  resultout_add$name  <- namei
+  resultout_info <- rbind(resultout_info,resultout_add)
+}
+allfiles_info <- data.frame(matrix(NA,ncol =8 ,nrow = 0))    
+colnames(allfiles_info) <-  c("name","Target.of.assay","Biosample.summary","Biosample.term.name","Life.stage","Age","Age.units","Biosample.treatment")
+for (namei in allfiles_name){
+  resultout_add <- chipseq_info[grepl(namei, chipseq_info$Files),c("Target.of.assay","Biosample.summary","Biosample.term.name","Life.stage","Age","Age.units","Biosample.treatment")]
+  resultout_add$name  <- namei
+  allfiles_info <- rbind(allfiles_info,resultout_add)
+}
+
+
+
+# combine resultout_info and resultout
+resultout$name <- gsub(".bed.gz","",resultout$file)
+resultout_info <- merge(resultout,resultout_info)
