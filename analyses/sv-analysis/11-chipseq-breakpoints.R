@@ -132,3 +132,6 @@ for (namei in allfiles_name){
 # combine resultout_info and resultout
 resultout$name <- gsub(".bed.gz","",resultout$file)
 resultout_info <- merge(resultout,resultout_info)
+
+# WRITE
+write.csv(resultout_info,file.path(root_dir,"scratch","chipseq","H3 chipseq significant result and sample info.csv"),quote = F)
